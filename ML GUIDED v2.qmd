@@ -1,9 +1,4 @@
 ---
-title: "Untitled"
-format: html
----
-
----
 title: "Clustering S&P 500 Stocks with Machine Learning"
 subtitle: "ML Project 1"
 author: "Jake Kulik-Warren"
@@ -41,8 +36,6 @@ Motivated by Brown and Goetzmann's methodology, this project extends the idea of
 # Setup
 
 ```{r}
-
-
 library(tidyverse)
 library(tidyquant)
 library(h2o)
