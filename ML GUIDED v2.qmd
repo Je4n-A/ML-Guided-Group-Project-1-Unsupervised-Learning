@@ -158,7 +158,7 @@ monthly_returns %>%
 #| fig-cap: "Average monthly return by year across S&P 500 stocks. Major market events are visible: the post-dot-com downturn (2001-02), the financial crisis (2008), the COVID crash and recovery (2020), and the 2022 bear market."
 
 monthly_returns %>%
-  mutate(year = year(date)) %>%
+  mutate(year = lubridate::year(date)) %>%
   group_by(year) %>%
   summarise(avg_return = mean(monthly_return, na.rm = TRUE), .groups = "drop") %>%
   ggplot(aes(x = year, y = avg_return, fill = avg_return > 0)) +
