@@ -1,7 +1,7 @@
 ---
 title: "Clustering S&P 500 Stocks with Machine Learning"
 subtitle: "Guided Project 1 - Unsupervised Learning"
-author: "Jake Kulik-Warren"
+author: "Group 8"
 affiliation: "University of South Florida"
 format:
   html:
