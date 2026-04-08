@@ -43,6 +43,8 @@ library(scales)
 library(knitr)
 library(kableExtra)
 library(corrplot)
+library(slider)
+library(moments)
 
 # Set seed for reproducibility
 set.seed(42)
@@ -158,13 +160,13 @@ monthly_returns %>%
 #| fig-cap: "Average monthly return by year across S&P 500 stocks. Major market events are visible: the post-dot-com downturn (2001-02), the financial crisis (2008), the COVID crash and recovery (2020), and the 2022 bear market."
 
 monthly_returns %>%
-  mutate(year = year(date)) %>%
+  mutate(year = lubridate::year(date)) %>%
   group_by(year) %>%
   summarise(avg_return = mean(monthly_return, na.rm = TRUE), .groups = "drop") %>%
   ggplot(aes(x = year, y = avg_return, fill = avg_return > 0)) +
   geom_col(alpha = 0.8, show.legend = FALSE) +
   scale_fill_manual(values = c("red3", "forestgreen")) +
-  scale_y_continuous(labels = percent_format()) +
+  scale_y_continuous(labels = scales::percent_format()) +
   labs(
     title = "Average Monthly Return by Year",
     x = "Year",
