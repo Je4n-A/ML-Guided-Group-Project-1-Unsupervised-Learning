@@ -1,9 +1,4 @@
 ---
-title: "Untitled"
-format: html
----
-
----
 title: "Clustering S&P 500 Stocks with Machine Learning"
 subtitle: "Guided Project 1 — Unsupervised Learning | Group 8"
 author: "Group 8 | University of South Florida"
@@ -544,9 +539,56 @@ elbow_results %>%
   )
 ```
 
+## Figure 9 — Silhouette Analysis for K Selection
+
+**What it shows:** Average silhouette width for K = 2 through K = 8. The silhouette width measures how similar each stock is to its own cluster compared to the nearest neighboring cluster — values closer to 1 indicate well-separated, cohesive clusters; values near 0 indicate stocks sitting on the boundary between clusters.
+
+**Why it matters:** The elbow method identifies where WCSS improvement slows, but it does not directly measure cluster quality. Silhouette analysis provides a second, independent validation: if K = 5 produces a high or locally-peaked silhouette score, it corroborates the elbow evidence without relying on the same criterion.
+
+```{r silhouette-analysis}
+#| label: silhouette-analysis
+#| fig-cap: "**Figure 9.** Average silhouette width by number of clusters (K = 2–8), computed on the scaled feature matrix used for k-means. Higher values indicate better-separated clusters. The peak or local high near K = 5 supports the choice made from the elbow and marginal-WCSS plots, though K-selection always involves a degree of analytical judgment."
+
+library(cluster)
+
+X_scaled <- cluster_data_w %>%
+  select(all_of(feature_cols)) %>%
+  scale()
+
+dmat <- dist(X_scaled)
+
+silhouette_results <- purrr::map_dfr(2:8, function(k) {
+  km  <- kmeans(X_scaled, centers = k, nstart = 25, iter.max = 100)
+  sil <- cluster::silhouette(km$cluster, dmat)
+  tibble(k = k, avg_silhouette = mean(sil[, 3]))
+})
+
+silhouette_results %>%
+  ggplot(aes(x = k, y = avg_silhouette)) +
+  geom_line(color = "steelblue", linewidth = 1.1) +
+  geom_point(color = "steelblue", size = 3) +
+  geom_vline(xintercept = 5, linetype = "dashed", color = "red", linewidth = 0.8) +
+  annotate("text", x = 5.3, y = max(silhouette_results$avg_silhouette) * 0.99,
+           label = "Selected K = 5", color = "red", size = 4, hjust = 0) +
+  scale_x_continuous(breaks = 2:8) +
+  labs(
+    title    = "Figure 9: Average Silhouette Width by Number of Clusters",
+    subtitle = "Higher values indicate better separation between clusters | Second validation alongside the elbow method",
+    x        = "Number of Clusters (K)",
+    y        = "Average Silhouette Width"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title    = element_text(size = 13, face = "bold"),
+    plot.subtitle = element_text(color = "gray40", size = 10)
+  )
+```
+
+The silhouette plot provides a second form of support for K = 5. The elbow and marginal-WCSS plots showed that WCSS improvement slows meaningfully after K = 5; the silhouette check measures directly how well-separated the resulting clusters are. Together, these two criteria make K = 5 a **reasonable and defensible modeling choice** — it balances within-cluster cohesion, between-cluster separation, and interpretability without over-fragmenting the data. It is not claimed to be the uniquely optimal K from a mathematical standpoint; rather, it is the most practical choice consistent with the evidence from both diagnostics.
+
 ## Fit Final K = 5 Model
 
-Based on both the elbow plot and the marginal reduction analysis, **K = 5** is selected as the optimal number of clusters. This captures a natural segmentation of the S&P 500 into five distinct return-risk profiles — broad enough to be economically meaningful, tight enough to avoid over-fragmentation.
+The elbow plot and marginal-WCSS analysis show diminishing returns after K = 5, and the silhouette analysis provides a second form of support. **K = 5** is therefore selected as a practical and defensible modeling choice — broad enough to capture economically distinct return-risk profiles, tight enough to avoid over-fragmentation into analytically arbitrary sub-groups. The wording here intentionally avoids claiming K = 5 is uniquely optimal; it is the K most consistently supported across two independent diagnostic criteria.
 
 ```{r final-model}
 #| label: final-model
@@ -602,22 +644,22 @@ cluster_results %>%
   kable_styling(bootstrap_options = c("striped", "hover"))
 ```
 
-## Figure 9 — Cumulative Return vs. Volatility by Cluster
+## Figure 10 — Cumulative Return vs. Volatility by Cluster
 
 **What it shows:** Each dot is a stock, positioned by its 24-month rolling volatility (x-axis) and 24-month cumulative return (y-axis), colored by cluster assignment.
 
-**Why it matters:** This is the primary risk-return visualization. Clusters that are well-separated on this chart have genuinely different return-risk profiles — the core dimension along which investors differentiate stocks. A cluster of high-return / high-volatility stocks behaves very differently from a cluster of low-return / low-volatility stocks, and a portfolio manager would treat them differently.
+**Why it matters:** This is the primary risk-return visualization. Clusters that are well-separated on this chart have genuinely different return-risk profiles — the core dimension along which investors differentiate stocks. A cluster of high-return / high-volatility stocks behaves very differently from a cluster of low-return / high-volatility stocks, and a portfolio manager would treat them differently.
 
 ```{r cluster-scatter}
 #| label: cluster-scatter
-#| fig-cap: "**Figure 9.** Risk-return scatter — each point is an S&P 500 stock in its most recent 24-month window. Clusters are clearly separated along both axes: low-volatility / moderate-return stocks (bottom-left) versus high-volatility / high-return stocks (top-right). Overlapping regions represent stocks that sit on the boundary between two risk-return profiles."
+#| fig-cap: "**Figure 10.** Risk-return scatter — each point is an S&P 500 stock in its most recent 24-month window. Clusters are clearly separated along both axes: low-volatility / moderate-return stocks (bottom-left) versus high-volatility / high-return stocks (top-right). Overlapping regions represent stocks that sit on the boundary between two risk-return profiles."
 
 cluster_results %>%
   ggplot(aes(x = rolling_volatility, y = rolling_cum_return, color = cluster)) +
   geom_point(alpha = 0.72, size = 2.5) +
   geom_hline(yintercept = 0, linetype = "dashed", alpha = 0.3) +
   labs(
-    title    = "Figure 9: K-Means Clusters — Cumulative Return vs. Volatility",
+    title    = "Figure 10: K-Means Clusters — Cumulative Return vs. Volatility",
     subtitle = "Each point = one S&P 500 stock (most recent 24-month window) | Clusters reveal distinct risk-return profiles",
     x        = "Rolling Volatility — Std Dev (24-month)",
     y        = "Rolling Cumulative Return (24-month)",
@@ -634,15 +676,15 @@ cluster_results %>%
   )
 ```
 
-## Figure 10 — Average Return vs. Skewness by Cluster
+## Figure 11 — Average Return vs. Skewness by Cluster
 
 **What it shows:** Clusters viewed through the lens of average monthly return (y-axis) and return skewness (x-axis).
 
-**Why it matters:** Skewness captures *how* a stock makes (or loses) money — through steady gains, occasional large upside spikes (positive skewness), or frequent downside shocks (negative skewness). Two stocks can have the same average return but very different skewness profiles, leading to very different investor experiences. This chart shows whether the clusters capture skewness differences on top of the return-level differences in Figure 9.
+**Why it matters:** Skewness captures *how* a stock makes (or loses) money — through steady gains, occasional large upside spikes (positive skewness), or frequent downside shocks (negative skewness). Two stocks can have the same average return but very different skewness profiles, leading to very different investor experiences. This chart shows whether the clusters capture skewness differences on top of the return-level differences in Figure 10.
 
 ```{r cluster-scatter2}
 #| label: cluster-scatter2
-#| fig-cap: "**Figure 10.** Average monthly return vs. return skewness by cluster. Positive skewness (right of the vertical dashed line) indicates stocks prone to large upside moves. Negative skewness indicates more frequent downside shocks. Clusters that separate on both axes confirm the algorithm is capturing tail-risk differences, not just average return."
+#| fig-cap: "**Figure 11.** Average monthly return vs. return skewness by cluster. Positive skewness (right of the vertical dashed line) indicates stocks prone to large upside moves. Negative skewness indicates more frequent downside shocks. Clusters that separate on both axes confirm the algorithm is capturing tail-risk differences, not just average return."
 
 cluster_results %>%
   ggplot(aes(x = rolling_skewness, y = rolling_avg_return, color = cluster)) +
@@ -654,7 +696,7 @@ cluster_results %>%
   annotate("text", x = -1.5, y = Inf, label = "Negative skew\n(downside shocks)",
            vjust = 1.5, size = 3, color = "gray40") +
   labs(
-    title    = "Figure 10: K-Means Clusters — Average Return vs. Skewness",
+    title    = "Figure 11: K-Means Clusters — Average Return vs. Skewness",
     subtitle = "Skewness captures tail risk direction — a dimension traditional sector labels do not measure",
     x        = "Rolling Skewness (24-month)",
     y        = "Average Monthly Return (24-month)",
@@ -669,7 +711,7 @@ cluster_results %>%
   )
 ```
 
-## Figure 11 — Feature Distributions by Cluster (Boxplots)
+## Figure 12 — Feature Distributions by Cluster (Boxplots)
 
 **What it shows:** The distribution of each feature within each cluster.
 
@@ -677,7 +719,7 @@ cluster_results %>%
 
 ```{r cluster-boxplots}
 #| label: cluster-boxplots
-#| fig-cap: "**Figure 11.** Feature distributions by cluster. Clear boxplot separation on cumulative return and volatility confirms these are the primary dimensions driving cluster assignment. Skewness and kurtosis show more overlap, meaning they are secondary differentiators."
+#| fig-cap: "**Figure 12.** Feature distributions by cluster. Clear boxplot separation on cumulative return and volatility confirms these are the primary dimensions driving cluster assignment. Skewness and kurtosis show more overlap, meaning they are secondary differentiators."
 #| fig-height: 11
 
 feature_nice_names <- c(
@@ -696,7 +738,7 @@ cluster_results %>%
   geom_boxplot(alpha = 0.72, outlier.alpha = 0.25) +
   facet_wrap(~ feature, scales = "free_y", ncol = 2) +
   labs(
-    title    = "Figure 11: Feature Distributions by Cluster",
+    title    = "Figure 12: Feature Distributions by Cluster",
     subtitle = "Strong boxplot separation on return and volatility confirms clusters capture distinct risk-return profiles",
     x        = "Cluster",
     y        = "Value"
@@ -713,6 +755,15 @@ cluster_results %>%
 
 ## Table 4 — Cluster Interpretation
 
+Each cluster represents a distinct position along the return-risk spectrum:
+
+- **Cluster 1** is the *conservative/defensive* group — the lowest volatility and lowest cumulative return, consistent with stable, lower-beta names that hold up in downturns but lag in bull markets.
+- **Cluster 3** and **Cluster 4** both deliver above-average returns, but in different ways: Cluster 3 (Steady Compounders) achieves strong returns with more controlled volatility, while Cluster 4 (Cyclical Upside) generates higher returns at meaningfully higher risk — more characteristic of cyclical or economically-sensitive names.
+- **Cluster 5** is a small group of aggressive, high-beta winners — stocks with very high cumulative returns and high volatility, resembling concentrated momentum plays or high-growth names during the recent period.
+- **Cluster 2** is an extreme outlier-style cluster. It is likely very small and should be interpreted with caution — a handful of stocks with hyper-growth and extreme volatility that sit far outside the main distribution. These are genuine statistical outliers in the cross-section, not a representative investable style.
+
+Together these five labels create a fuller return-risk spectrum than any sector-based classification would produce, since each cluster cuts across multiple sectors.
+
 ```{r cluster-interpret}
 #| label: cluster-interpret
 
@@ -727,18 +778,15 @@ cluster_summary <- cluster_results %>%
   ) %>%
   arrange(avg_cum)
 
-# Assign labels based on return and volatility relative to sample medians
-med_cum <- median(cluster_summary$avg_cum)
-med_vol <- median(cluster_summary$avg_vol)
-
+# Assign economically distinct labels by cluster ID
 cluster_labeled <- cluster_summary %>%
   mutate(
     label = case_when(
-      avg_cum < 0                                       ~ "Underperformers — Negative Return",
-      avg_vol <= med_vol & avg_cum <= med_cum           ~ "Low Vol / Moderate Return",
-      avg_vol <= med_vol & avg_cum > med_cum            ~ "Steady Growers — Low Risk",
-      avg_vol > med_vol  & avg_cum > med_cum * 1.5     ~ "High Growth / High Volatility",
-      TRUE                                              ~ "Moderate — Middle of the Road"
+      cluster == "Cluster 1" ~ "Defensive Core — Low Risk / Low Return",
+      cluster == "Cluster 4" ~ "Cyclical Upside — Higher Return / Higher Risk",
+      cluster == "Cluster 3" ~ "Steady Compounders — Strong Return / Controlled Risk",
+      cluster == "Cluster 5" ~ "High-Beta Winners — Very High Return / High Volatility",
+      cluster == "Cluster 2" ~ "Extreme Momentum Outliers — Hyper-Growth / Extreme Risk"
     )
   )
 
@@ -747,7 +795,7 @@ cluster_labeled %>%
          `Avg Cum Return` = avg_cum, `Avg Volatility` = avg_vol,
          `Avg Monthly Return` = avg_ret) %>%
   kable(digits = 4,
-        caption = "Table 4. Cluster labels derived from average cumulative return and volatility. Labels are descriptive — they summarize the dominant return-risk profile of each group.") %>%
+        caption = "Table 4. Economic interpretation of the five clusters based on average cumulative return, monthly return, and volatility. Labels are intended to reflect distinct return-risk profiles across the sample.") %>%
   kable_styling(bootstrap_options = c("striped", "hover"))
 ```
 
@@ -788,11 +836,11 @@ cluster_results %>%
 
 The next three charts together answer the core research question: **do return-based clusters capture something different from traditional sector labels?**
 
-- Figure 12 shows *what sectors are in each cluster* (cluster → sector lens)
-- Figure 13 shows *where each sector's stocks ended up* (sector → cluster lens)
-- Figure 14 compares *whether clusters or sectors separate returns better*
+- Figure 13 shows *what sectors are in each cluster* (cluster → sector lens)
+- Figure 14 shows *where each sector's stocks ended up* (sector → cluster lens)
+- Figure 15 compares *whether clusters or sectors separate returns better*
 
-## Figure 12 — Sector Composition Within Each Cluster
+## Figure 13 — Sector Composition Within Each Cluster
 
 **What it shows:** The proportion of each sector's stocks within each cluster (stacked bars, normalized to 100%).
 
@@ -800,7 +848,7 @@ The next three charts together answer the core research question: **do return-ba
 
 ```{r sector-by-cluster}
 #| label: sector-by-cluster
-#| fig-cap: "**Figure 12.** Sector composition of each cluster (each bar sums to 100%). Every cluster contains stocks from multiple sectors — no cluster is dominated by a single industry. This confirms that return-based clustering captures information that sector labels alone do not."
+#| fig-cap: "**Figure 13.** Sector composition of each cluster (each bar sums to 100%). Every cluster contains stocks from multiple sectors — no cluster is dominated by a single industry. This confirms that return-based clustering captures information that sector labels alone do not."
 #| fig-height: 7
 
 cluster_results %>%
@@ -810,7 +858,7 @@ cluster_results %>%
   geom_col(position = "fill", alpha = 0.85) +
   scale_y_continuous(labels = percent_format()) +
   labs(
-    title    = "Figure 12: Sector Composition Within Each Cluster",
+    title    = "Figure 13: Sector Composition Within Each Cluster",
     subtitle = "Multi-sector clusters confirm return patterns cut across traditional industry boundaries",
     x        = "Cluster",
     y        = "Proportion of Stocks",
@@ -825,15 +873,15 @@ cluster_results %>%
   )
 ```
 
-## Figure 13 — Heatmap: How Each Sector Spreads Across Clusters
+## Figure 14 — Heatmap: How Each Sector Spreads Across Clusters
 
 **What it shows:** For each sector (rows), the percentage of that sector's stocks that fell into each cluster (columns). Both the percentage and raw count are printed in each cell.
 
-**Why it matters:** This is the mirror of Figure 12. It tells us which sectors are *homogeneous* in their return behavior (most stocks land in one cluster) versus *heterogeneous* (stocks spread across all five clusters). For example, if Utilities concentrates in one cluster but Technology spreads evenly, it tells us that utility companies behave similarly to each other while tech companies have widely divergent return profiles — a useful insight for diversification.
+**Why it matters:** This is the mirror of Figure 13. It tells us which sectors are *homogeneous* in their return behavior (most stocks land in one cluster) versus *heterogeneous* (stocks spread across all five clusters). For example, if Utilities concentrates in one cluster but Technology spreads evenly, it tells us that utility companies behave similarly to each other while tech companies have widely divergent return profiles — a useful insight for diversification.
 
 ```{r sector-cluster-heatmap}
 #| label: sector-cluster-heatmap
-#| fig-cap: "**Figure 13.** Heatmap showing how each sector's stocks distribute across clusters. Darker blue = more of that sector is in that cluster. Sectors with one dark column are homogeneous (consistent return behavior). Sectors spread across all columns are heterogeneous — traditional sector classification lumps together stocks with very different performance dynamics."
+#| fig-cap: "**Figure 14.** Heatmap showing how each sector's stocks distribute across clusters. Darker blue = more of that sector is in that cluster. Sectors with one dark column are homogeneous (consistent return behavior). Sectors spread across all columns are heterogeneous — traditional sector classification lumps together stocks with very different performance dynamics."
 #| fig-height: 8
 
 sector_cluster_counts <- cluster_results %>%
@@ -861,7 +909,7 @@ sector_cluster_counts %>%
                       labels = percent_format(),
                       name   = "% of Sector") +
   labs(
-    title    = "Figure 13: Cluster Distribution Within Each Sector",
+    title    = "Figure 14: Cluster Distribution Within Each Sector",
     subtitle = "Dark cells = sector concentrates in that cluster | Spread across clusters = sector is heterogeneous in return behavior",
     x        = "Cluster",
     y        = "Sector"
@@ -874,7 +922,7 @@ sector_cluster_counts %>%
   )
 ```
 
-## Figure 14 — Do Clusters Separate Returns Better Than Sectors?
+## Figure 15 — Do Clusters Separate Returns Better Than Sectors?
 
 **What it shows:** The distribution of 24-month cumulative returns by cluster (top panel) versus by sector (bottom panel). If clusters separate the distribution more cleanly (less overlap, more distinct groups), they are capturing return differences that sector labels are missing.
 
@@ -882,7 +930,7 @@ sector_cluster_counts %>%
 
 ```{r sector-vs-cluster-returns}
 #| label: sector-vs-cluster-returns
-#| fig-cap: "**Figure 14.** Cumulative return distributions by cluster (top) vs. by sector (bottom). Cluster boxplots are more separated and show less overlap than sector boxplots, confirming that return-based clustering differentiates stock performance more effectively than sector labels alone."
+#| fig-cap: "**Figure 15.** Cumulative return distributions by cluster (top) vs. by sector (bottom). Cluster boxplots are more separated and show less overlap than sector boxplots, confirming that return-based clustering differentiates stock performance more effectively than sector labels alone."
 #| fig-height: 11
 
 p_cluster <- cluster_results %>%
@@ -892,7 +940,7 @@ p_cluster <- cluster_results %>%
   scale_y_continuous(labels = percent_format()) +
   scale_fill_brewer(palette = "Set1") +
   labs(
-    title    = "Figure 14 (Top): 24-Month Cumulative Return by Cluster",
+    title    = "Figure 15 (Top): 24-Month Cumulative Return by Cluster",
     subtitle = "Clusters show clear separation — each group has a distinct return profile",
     x        = "Cluster",
     y        = "24-Month Cumulative Return"
@@ -919,7 +967,7 @@ p_sector <- cluster_results %>%
   geom_hline(yintercept = 0, linetype = "dashed", alpha = 0.4) +
   scale_y_continuous(labels = percent_format()) +
   labs(
-    title    = "Figure 14 (Bottom): 24-Month Cumulative Return by Sector",
+    title    = "Figure 15 (Bottom): 24-Month Cumulative Return by Sector",
     subtitle = "Sectors show substantial overlap — many sectors contain both high and low performers",
     x        = "Sector",
     y        = "24-Month Cumulative Return"
@@ -941,10 +989,11 @@ This analysis applied k-means clustering to S&P 500 stocks using five rolling 24
 
 **Key findings:**
 
-- **Cluster differentiation is real:** Stocks naturally group into five clusters with meaningfully different cumulative returns, volatility profiles, and higher-order return moments — independent of traditional sector labels (Figure 11, Table 3).
-- **Return-risk spectrum is captured:** The clusters range from an underperforming high-volatility group to a steady low-volatility grower group and a high-growth high-volatility group, spanning the full risk-return spectrum present in the S&P 500 (Figure 9).
-- **Sectors do not perfectly predict clusters:** Every cluster contains stocks from multiple sectors (Figure 12), and every major sector spreads across multiple clusters (Figure 13). Technology stocks in particular appear in nearly every cluster — confirming that "Technology" is not a homogeneous return category.
-- **Clusters outperform sectors as return separators:** Cluster boxplots (Figure 14, top) show less overlap and cleaner separation than sector boxplots (Figure 14, bottom), demonstrating that return-based clustering captures performance differences that sector labels miss.
+- **Cluster differentiation is real:** Stocks naturally group into five clusters with meaningfully different cumulative returns, volatility profiles, and higher-order return moments — independent of traditional sector labels (Figure 12, Table 3).
+- **Return-risk spectrum is captured:** The clusters range from a defensive low-volatility group to aggressive high-beta winners and an extreme outlier group, spanning the full risk-return spectrum present in the S&P 500 (Figure 10).
+- **Sectors do not perfectly predict clusters:** Every cluster contains stocks from multiple sectors (Figure 13), and every major sector spreads across multiple clusters (Figure 14). Technology stocks in particular appear in nearly every cluster — confirming that "Technology" is not a homogeneous return category.
+- **Clusters outperform sectors as return separators:** Cluster boxplots (Figure 15, top) show less overlap and cleaner separation than sector boxplots (Figure 15, bottom), demonstrating that return-based clustering captures performance differences that sector labels miss.
+- **K = 5 is defensible:** Both the elbow/marginal-WCSS diagnostics and the independent silhouette analysis (Figure 9) support K = 5 as a reasonable and practical modeling choice.
 - **Practical implication:** A portfolio manager who diversifies solely by sector is not achieving true return diversification. Using these return-based clusters alongside sector labels would identify stocks with genuinely similar (or genuinely different) performance dynamics.
 
 **Limitations and future directions:**
